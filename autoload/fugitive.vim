@@ -3930,8 +3930,12 @@ function! fugitive#Command(line1, line2, range, bang, mods, arg, ...) abort
       let do_edit = s:Mods(a:mods, 'SpanOrigin') . 'pedit'
     elseif !curwin
       let do_edit = s:Mods(a:mods, 'SpanOrigin') . 'split'
+      let stream = exists('*setbufline')
+      let state.pager = pager
     else
       let do_edit = s:Mods(a:mods) . 'edit'
+      let stream = exists('*setbufline')
+      let state.pager = pager
       call s:BlurStatus()
     endif
     call extend(env, {'COLUMNS': '' . get(g:, 'fugitive_columns', 80)}, 'keep')
@@ -4002,8 +4006,8 @@ function! fugitive#Command(line1, line2, range, bang, mods, arg, ...) abort
       let job = jobstart(argv, extend(jobopts, {
             \ 'pty': state.pty,
             \ 'TERM': 'dumb',
-            \ 'stdout_buffered': pager,
-            \ 'stderr_buffered': pager,
+            \ 'stdout_buffered': pager && !stream,
+            \ 'stderr_buffered': pager && !stream,
             \ 'on_stdout': function('s:RunReceive', [state, tmp, 'out']),
             \ 'on_stderr': function('s:RunReceive', [state, tmp, 'err']),
             \ 'on_exit': function('s:RunClose', [state, tmp]),
