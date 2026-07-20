@@ -2678,6 +2678,24 @@ let s:rebase_abbrevs = {
       \ 'b': 'break',
       \ }
 
+function! s:StatusPush() abort
+  let dir = s:Dir()
+  let counts = s:ChompDefault('', [dir, 'rev-list', '--count', '--left-right', '@{upstream}...HEAD'])
+  let parts = split(counts, '\s\+')
+  let behind = len(parts) > 0 ? str2nr(parts[0]) : 0
+  let ahead  = len(parts) > 1 ? str2nr(parts[1]) : 0
+  if behind > 0 && ahead > 0
+    echohl WarningMsg
+    echo printf('Local branch has diverged from upstream (%d ahead, %d behind).', ahead, behind)
+    echohl NONE
+    if confirm('Force push?', "&Yes\n&No", 2) == 1
+      return 'Git push --force-with-lease'
+    endif
+    return ''
+  endif
+  return 'Git push'
+endfunction
+
 function! s:MapStatus() abort
   call fugitive#MapJumps()
   call s:Map('n', '-', ":<C-U>execute <SID>Do('Toggle',0)<CR>", '<silent>')
@@ -2687,6 +2705,9 @@ function! s:MapStatus() abort
   call s:Map('n', 'u', ":<C-U>execute <SID>Do('Unstage',0)<CR>", '<silent>')
   call s:Map('x', 'u', ":<C-U>execute <SID>Do('Unstage',1)<CR>", '<silent>')
   call s:Map('n', 'U', ":<C-U>Git reset -q<CR>", '<silent>')
+  call s:Map('n', 'S', ":<C-U>Git add --all<CR>", '<silent>')
+  call s:Map('n', '<Leader>p', ":<C-U>exe <SID>StatusPush()<CR>", '<silent>')
+  call s:Map('n', '<Leader>P', ":<C-U>Git pull<CR>", '<silent>')
   call s:MapMotion('gu', "exe <SID>StageJump(v:count, 'Untracked', 'Unstaged')")
   call s:MapMotion('gU', "exe <SID>StageJump(v:count, 'Unstaged', 'Untracked')")
   call s:MapMotion('gs', "exe <SID>StageJump(v:count, 'Staged')")
@@ -8122,6 +8143,7 @@ function! s:MapHelpSections() abort
           \ ['s', 'stage file / hunk under cursor'],
           \ ['u', 'unstage file / hunk under cursor'],
           \ ['-', 'stage or unstage file / hunk'],
+          \ ['S', 'stage everything (tracked & untracked)'],
           \ ['U', 'unstage everything'],
           \ ['X', 'discard change under cursor'],
           \ ['=', 'toggle inline diff'],
@@ -8129,6 +8151,10 @@ function! s:MapHelpSections() abort
           \ ['<', 'hide inline diff'],
           \ ['I', 'invoke :Git add/reset --patch'],
           \ ['gI', 'add file under cursor to .gitignore'],
+          \ ]])
+    call add(sections, ['Push / Pull', [
+          \ ['<leader>p', 'push (prompt to force if diverged)'],
+          \ ['<leader>P', 'pull'],
           \ ]])
     call add(sections, ['Jump to section', [
           \ ['gu', 'jump to Untracked / Unstaged'],
