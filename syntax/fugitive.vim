@@ -12,6 +12,7 @@ syn match fugitiveHeader /^Head:/ nextgroup=fugitiveHash,fugitiveSymbolicRef ski
 syn match fugitiveHeader /^Pull:\|^Rebase:\|^Merge:\|^Push:/ nextgroup=fugitiveSymbolicRef skipwhite
 syn match fugitiveHelpHeader /^Help:/ nextgroup=fugitiveHelpTag skipwhite
 syn match fugitiveHelpTag    /\S\+/ contained
+syn match fugitiveStagedLines /^\%(\d\+ files\= changed.*\|No staged changes\)$/
 
 syn region fugitiveSection start=/^\%(.*(\d\++\=)$\)\@=/ contains=fugitiveHeading end=/^$/ fold
 syn cluster fugitiveSection contains=fugitiveSection
@@ -38,6 +39,7 @@ endfor
 unlet s:section
 
 hi def link fugitiveHelpHeader fugitiveHeader
+hi def link fugitiveStagedLines Comment
 hi def link fugitiveHeader Label
 hi def link fugitiveHelpTag Tag
 hi def link fugitiveHeading PreProc

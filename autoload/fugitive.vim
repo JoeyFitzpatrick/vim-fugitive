@@ -3006,6 +3006,8 @@ function! s:StatusRender(stat) abort
     if get(fugitive#ConfigGetAll('advice.statusHints', config), 0, 'true') !~# '^\%(false\|no|off\|0\|\)$'
       call s:AddHeader(to, 'Help', 'g?')
     endif
+    let staged_shortstat = substitute(get(fugitive#Execute(['diff', '--staged', '--shortstat'], dir).stdout, 0, ''), '^\s*', '', '')
+    call add(to.lines, empty(staged_shortstat) ? 'No staged changes' : staged_shortstat)
 
     call s:AddSection(to, 'Rebasing ' . rebasing_head, rebasing)
     call s:AddSection(to, get(get(sequencing, 0, {}), 'status', '') ==# 'revert' ? 'Reverting' : 'Cherry Picking', sequencing)
