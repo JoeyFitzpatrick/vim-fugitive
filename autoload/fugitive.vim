@@ -7468,7 +7468,7 @@ function! s:BlameMaps(is_ftplugin) abort
   let ft = a:is_ftplugin
   call s:MapGitOps(ft)
   call s:Map('n', '<F1>', ':help :Git_blame<CR>', '<silent>', ft)
-  call s:Map('n', 'g?',   ':help :Git_blame<CR>', '<silent>', ft)
+  call s:Map('n', 'g?',   ':<C-U>call <SID>MapHelp()<CR>', '<silent>', ft)
   call s:Map('n', 'gq',   ':exe <SID>BlameQuit()<CR>', '<silent>', ft)
   call s:Map('n', '<2-LeftMouse>', ':<C-U>exe <SID>BlameCommit("exe <SID>BlameLeave()<Bar>edit")<CR>', '<silent>', ft)
   call s:Map('n', '<CR>', ':<C-U>exe <SID>BlameCommit("exe <SID>BlameLeave()<Bar>edit")<CR>', '<silent>', ft)
@@ -8098,6 +8098,215 @@ function! s:MapGitOps(is_ftplugin) abort
   exe s:Map('n', 'q', ':<C-U>bdelete<CR>', '<silent>', ft)
 endfunction
 
+function! s:MapHelpSections() abort
+  let ft = &filetype
+  let type = get(b:, 'fugitive_type', '')
+  let sections = []
+
+  if ft ==# 'fugitiveblame'
+    call add(sections, ['Blame', [
+          \ ['<CR>', 'open commit, replacing the blame'],
+          \ ['o', 'open commit in horizontal split'],
+          \ ['O', 'open commit in new tab'],
+          \ ['p', 'open commit in preview window'],
+          \ ['-', 'reblame at commit / at its parent'],
+          \ ['~', 'reblame at [count] commits before'],
+          \ ['P', 'reblame at [count]th parent'],
+          \ ['A', 'resize to end of the author column'],
+          \ ['C', 'resize to end of the commit column'],
+          \ ['D', 'resize to end of the date/time column'],
+          \ ['gq', 'close the blame'],
+          \ ]])
+  elseif type ==# 'index'
+    call add(sections, ['Staging', [
+          \ ['s', 'stage file / hunk under cursor'],
+          \ ['u', 'unstage file / hunk under cursor'],
+          \ ['-', 'stage or unstage file / hunk'],
+          \ ['U', 'unstage everything'],
+          \ ['X', 'discard change under cursor'],
+          \ ['=', 'toggle inline diff'],
+          \ ['>', 'show inline diff'],
+          \ ['<', 'hide inline diff'],
+          \ ['I', 'invoke :Git add/reset --patch'],
+          \ ['gI', 'add file under cursor to .gitignore'],
+          \ ]])
+    call add(sections, ['Jump to section', [
+          \ ['gu', 'jump to Untracked / Unstaged'],
+          \ ['gU', 'jump to Unstaged / Untracked'],
+          \ ['gs', 'jump to Staged'],
+          \ ['gp', 'jump to Unpushed'],
+          \ ['gP', 'jump to Unpulled'],
+          \ ['gr', 'jump to Rebasing'],
+          \ ]])
+  endif
+
+  if ft !=# 'fugitiveblame'
+    if type ==# 'blob'
+      call add(sections, ['Open', [
+            \ ['<CR>', 'blame this file'],
+            \ ['o', 'blame in horizontal split'],
+            \ ['gO', 'blame in vertical split'],
+            \ ['O', 'blame in new tab'],
+            \ ['p', 'blame in preview window'],
+            \ ]])
+    else
+      call add(sections, ['Open', [
+            \ ['<CR>', 'open file / commit under cursor'],
+            \ ['o', 'open in horizontal split'],
+            \ ['gO', 'open in vertical split'],
+            \ ['O', 'open in new tab'],
+            \ ['p', 'open in preview window'],
+            \ ]])
+      call add(sections, ['Navigation', [
+            \ ['(', 'previous file / hunk'],
+            \ [')', 'next file / hunk'],
+            \ ['[c', 'previous hunk'],
+            \ [']c', 'next hunk'],
+            \ ['[[', 'previous section'],
+            \ [']]', 'next section'],
+            \ ]])
+    endif
+    call add(sections, ['Diff', [
+          \ ['dd', 'diff'],
+          \ ['dv', 'vertical diff'],
+          \ ['ds', 'horizontal diff'],
+          \ ['dp', 'diff, edit working copy'],
+          \ ['dq', 'close diffs'],
+          \ ]])
+    call add(sections, ['Navigate revisions', [
+          \ ['-', 'go up to parent tree / directory'],
+          \ ['~', 'open [count] commits ancestor'],
+          \ ['P', 'open [count]th parent'],
+          \ ['C', 'open containing commit'],
+          \ ['gc', 'open containing commit in preview'],
+          \ ['gi', 'edit .git/info/exclude ([count] .gitignore)'],
+          \ ]])
+  endif
+
+  " Shared git operation maps, available in every read-only fugitive buffer
+  call add(sections, ['Commit', [
+        \ ['cc', 'commit'],
+        \ ['ca', 'commit --amend'],
+        \ ['ce', 'commit --amend --no-edit'],
+        \ ['cw', 'commit --amend --only (reword)'],
+        \ ['cvc', 'commit --verbose (in a new tab)'],
+        \ ['cf', 'commit --fixup=[commit under cursor]'],
+        \ ['cs', 'commit --squash=[commit under cursor]'],
+        \ ['cn', 'commit --edit --squash=[commit under cursor]'],
+        \ ['c<Space>', 'populate command line with :Git commit'],
+        \ ]])
+  call add(sections, ['Checkout / Branch', [
+        \ ['coo', 'checkout commit / file under cursor'],
+        \ ['cb<Space>', 'populate command line with :Git branch'],
+        \ ]])
+  call add(sections, ['Merge / Revert', [
+        \ ['crc', 'revert commit under cursor'],
+        \ ['crn', 'revert commit under cursor --no-commit'],
+        \ ['cm<Space>', 'populate command line with :Git merge'],
+        \ ['cmt', 'invoke :Git mergetool'],
+        \ ]])
+  call add(sections, ['Stash', [
+        \ ['czz', 'stash push'],
+        \ ['czw', 'stash push --keep-index'],
+        \ ['czs', 'stash push --staged'],
+        \ ['cza', 'stash apply [count] (keep index)'],
+        \ ['czp', 'stash pop [count] (keep index)'],
+        \ ['czv', 'open stash [count]'],
+        \ ]])
+  call add(sections, ['Rebase', [
+        \ ['ri', 'rebase --interactive (rf: --autosquash)'],
+        \ ['ru', 'rebase --interactive @{upstream}'],
+        \ ['rp', 'rebase --interactive @{push}'],
+        \ ['rw', 'rebase --interactive, reword commit'],
+        \ ['rm', 'rebase --interactive, edit commit'],
+        \ ['rd', 'rebase --interactive, drop commit'],
+        \ ['rr', 'rebase --continue'],
+        \ ['rs', 'rebase --skip'],
+        \ ['re', 'rebase --edit-todo'],
+        \ ['ra', 'rebase --abort'],
+        \ ]])
+
+  call add(sections, ['General', [
+        \ ['g?', 'show this help'],
+        \ ['gq', 'close the fugitive buffer'],
+        \ ['q', 'close the fugitive buffer'],
+        \ ]])
+
+  return sections
+endfunction
+
+function! s:MapHelpLines() abort
+  let lines = []
+  for [title, maps] in s:MapHelpSections()
+    if !empty(lines)
+      call add(lines, '')
+    endif
+    call add(lines, title)
+    call add(lines, repeat('─', strchars(title)))
+    for [lhs, desc] in maps
+      call add(lines, printf('  %-10s %s', lhs, desc))
+    endfor
+  endfor
+  return lines
+endfunction
+
+function! s:MapHelpPopupFilter(winid, key) abort
+  let pos = popup_getpos(a:winid)
+  let first = get(pos, 'firstline', 1)
+  let height = get(pos, 'core_height', 10)
+  let maxfirst = max([1, get(s:, 'help_total', first) - height + 1])
+  if a:key ==# 'j' || a:key ==# "\<Down>" || a:key ==# "\<C-E>"
+    call popup_setoptions(a:winid, {'firstline': min([first + 1, maxfirst])})
+  elseif a:key ==# 'k' || a:key ==# "\<Up>" || a:key ==# "\<C-Y>"
+    call popup_setoptions(a:winid, {'firstline': max([1, first - 1])})
+  elseif a:key ==# "\<C-D>" || a:key ==# "\<Space>" || a:key ==# "\<PageDown>"
+    call popup_setoptions(a:winid, {'firstline': min([first + height, maxfirst])})
+  elseif a:key ==# "\<C-U>" || a:key ==# "\<PageUp>"
+    call popup_setoptions(a:winid, {'firstline': max([1, first - height])})
+  else
+    call popup_close(a:winid)
+  endif
+  return 1
+endfunction
+
+function! s:MapHelp() abort
+  let lines = s:MapHelpLines()
+  let width = 4
+  for line in lines
+    let width = max([width, strdisplaywidth(line)])
+  endfor
+  let width = min([width + 1, &columns - 4])
+  if has('nvim')
+    let height = min([len(lines), &lines - 4])
+    let buf = nvim_create_buf(v:false, v:true)
+    call nvim_buf_set_lines(buf, 0, -1, v:false, lines)
+    let opts = {'relative': 'editor', 'width': width, 'height': height,
+          \ 'row': max([0, (&lines - height) / 2 - 1]),
+          \ 'col': max([0, (&columns - width) / 2]),
+          \ 'style': 'minimal', 'border': 'rounded'}
+    if has('nvim-0.9')
+      let opts.title = ' Fugitive maps '
+    endif
+    call nvim_open_win(buf, v:true, opts)
+    setlocal nomodifiable nocursorline nowrap bufhidden=wipe
+    for lhs in ['q', '<Esc>', '<CR>', 'g?']
+      exe 'nnoremap <buffer><silent><nowait>' lhs ':close<CR>'
+    endfor
+  elseif exists('*popup_create')
+    let s:help_total = len(lines)
+    call popup_create(lines, {
+          \ 'title': ' Fugitive maps ',
+          \ 'border': [], 'padding': [0, 1, 0, 1],
+          \ 'pos': 'center', 'line': &lines / 2, 'col': &columns / 2,
+          \ 'maxheight': &lines - 4, 'maxwidth': &columns - 4,
+          \ 'scrollbar': 1, 'mapping': 0, 'filtermode': 'n',
+          \ 'filter': function('s:MapHelpPopupFilter')})
+  else
+    echo join(lines, "\n")
+  endif
+  return ''
+endfunction
+
 function! fugitive#MapJumps(...) abort
   if !&modifiable
     if get(b:, 'fugitive_type', '') ==# 'blob'
@@ -8164,7 +8373,7 @@ function! fugitive#MapJumps(...) abort
 
     call s:Map('n', '.',     ":<C-U> <C-R>=<SID>fnameescape(fugitive#Real(@%))<CR><Home>")
     call s:Map('x', '.',     ":<C-U> <C-R>=<SID>fnameescape(fugitive#Real(@%))<CR><Home>")
-    call s:Map('n', 'g?',    ":<C-U>help fugitive-maps<CR>", '<silent>')
+    call s:Map('n', 'g?',    ":<C-U>call <SID>MapHelp()<CR>", '<silent>')
     call s:Map('n', '<F1>',  ":<C-U>help fugitive-maps<CR>", '<silent>')
   endif
 
