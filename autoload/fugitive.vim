@@ -8095,6 +8095,7 @@ function! s:MapGitOps(is_ftplugin) abort
   exe s:Map('n', 're', ':<C-U>Git rebase --edit-todo<CR>', '<silent>', ft)
   exe s:Map('n', 'ra', ':<C-U>Git rebase --abort<CR>', '<silent>', ft)
   exe s:Map('n', 'r?', ':<C-U>help fugitive_r<CR>', '<silent>', ft)
+  exe s:Map('n', 'q', ':<C-U>bdelete<CR>', '<silent>', ft)
 endfunction
 
 function! fugitive#MapJumps(...) abort
