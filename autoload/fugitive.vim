@@ -3630,6 +3630,9 @@ endfunction
 if !exists('s:edit_jobs')
   let s:edit_jobs = {}
 endif
+if !exists('s:terminal_edits')
+  let s:terminal_edits = {}
+endif
 function! s:RunWait(state, tmp, job, ...) abort
   if a:0 && filereadable(a:1)
     call delete(a:1)
@@ -3721,6 +3724,11 @@ function! fugitive#Resume() abort
 endfunction
 
 function! s:RunBufDelete(bufnr) abort
+  if has_key(s:terminal_edits, a:bufnr)
+    " Removing the sentinel unblocks the GIT_EDITOR helper running in the
+    " terminal, allowing the git process there to continue.
+    call delete(remove(s:terminal_edits, a:bufnr))
+  endif
   let state = s:TempState(+a:bufnr)
   if has_key(state, 'job')
     try
@@ -3749,6 +3757,61 @@ augroup fugitive_job
         \   call call('s:RunWait', remove(s:edit_jobs, s:jobbuf)) |
         \ endfor
 augroup END
+
+" Open an interactive terminal for a subcommand (see s:TerminalMode) and apply
+" the standard fugitive maps so the output can be navigated once the process
+" finishes.  Neovim only.
+function! fugitive#OpenTerminal(cmd, options) abort
+  let opts = {}
+  if !empty(get(a:options, 'env', {}))
+    let opts.env = a:options.env
+  endif
+  if !empty(get(a:options, 'cwd', ''))
+    let opts.cwd = a:options.cwd
+  endif
+  call termopen(a:cmd, opts)
+  let b:fugitive_terminal = 1
+  if len(get(a:options, 'git_dir', ''))
+    call FugitiveDetect({'git_dir': a:options.git_dir})
+  endif
+  let b:fugitive_type = 'temp'
+  " Terminal buffers are unmodifiable, which is what the git-buffer maps expect.
+  call fugitive#MapJumps()
+  if !&modifiable
+    call s:Map('n', 'gq', ":<C-U>bdelete!<CR>", '<silent>')
+  endif
+  return ''
+endfunction
+
+" Invoked (via --remote-expr) by the GIT_EDITOR helper running inside an
+" interactive terminal.  Opens the file the terminal's git process wants edited
+" in the current session; deleting the resulting buffer removes the sentinel and
+" lets git continue (see s:RunBufDelete).
+function! fugitive#TerminalEditRequest(base) abort
+  let sentinel = a:base . '.edit'
+  if !filereadable(sentinel)
+    return ''
+  endif
+  let file = FugitiveVimPath(readfile(sentinel, '', 1)[0])
+  try
+    exe 'keepalt split' s:fnameescape(file)
+  catch /^Vim\%((\a\+)\)\=:/
+    call delete(sentinel)
+    return ''
+  endtry
+  setlocal bufhidden=wipe
+  call FugitiveDetect(file)
+  let s:terminal_edits[bufnr('')] = sentinel
+  if exists('#User#FugitiveEditor')
+    let g:fugitive_event = get(b:, 'git_dir', '')
+    try
+      exe s:DoAutocmd('User FugitiveEditor')
+    finally
+      unlet! g:fugitive_event
+    endtry
+  endif
+  return ''
+endfunction
 
 function! fugitive#CanPty() abort
   return get(g:, 'fugitive_pty_debug_override',
@@ -3793,6 +3856,33 @@ for s:colortype in ['advice', 'branch', 'diff', 'grep', 'interactive', 'pager', 
   call extend(s:disable_colors, ['-c', 'color.' . s:colortype . '=false'])
 endfor
 unlet s:colortype
+
+" Subcommands whose output is shown in an interactive terminal buffer (Neovim
+" only) so that ANSI highlighting is preserved and the result can be navigated
+" with the usual fugitive maps.  The value selects how the terminal behaves:
+"   'interactive' - keep the process interactive and route any editor it spawns
+"                   (e.g. the commit message) back into the current session.
+"   'read'        - always use a terminal (read-only output).
+"   'read-only'   - use a terminal only for "read" variants of the command, as
+"                   classified by fugitive#PagerFor(); "write" variants keep the
+"                   default behavior.
+" Override or extend via the g:fugitive_terminal_commands dictionary.
+let s:terminal_subcommands = {'commit': 'interactive', 'status': 'read'}
+
+function! s:TerminalMode(args, pager, no_pager) abort
+  if !has('nvim') || a:no_pager
+    return ''
+  endif
+  let cmds = extend(copy(s:terminal_subcommands), get(g:, 'fugitive_terminal_commands', {}))
+  let mode = get(cmds, get(a:args, 0, ''), '')
+  if mode ==# 'read-only'
+    return a:pager is# 0 ? '' : 'read'
+  elseif mode ==# 'read' || mode ==# 'interactive'
+    return mode
+  endif
+  return ''
+endfunction
+
 function! fugitive#Command(line1, line2, range, bang, mods, arg, ...) abort
   exe s:VersionCheck()
   let dir = call('s:Dir', a:000)
@@ -3884,7 +3974,8 @@ function! fugitive#Command(line1, line2, range, bang, mods, arg, ...) abort
   if pager is# -1
     let pager = fugitive#PagerFor(args, config)
   endif
-  let wants_terminal = type(pager) ==# type('') ||
+  let terminal_mode = s:TerminalMode(args, pager, no_pager)
+  let wants_terminal = len(terminal_mode) || type(pager) ==# type('') ||
         \ (s:HasOpt(args, ['add', 'checkout', 'commit', 'reset', 'restore', 'stage', 'stash'], '-p', '--patch') ||
         \ s:HasOpt(args, ['add', 'clean', 'stage'], '-i', '--interactive')) && pager is# 0
   if wants_terminal
@@ -3892,7 +3983,26 @@ function! fugitive#Command(line1, line2, range, bang, mods, arg, ...) abort
     let assign = len(dir) ? "|call FugitiveDetect({'git_dir':" . string(options.git_dir) . '})' : ''
     let argv = s:UserCommandList(options) + args
     let term_opts = len(env) ? {'env': env} : {}
-    if has('nvim')
+    if len(terminal_mode)
+      call fugitive#Autowrite()
+      call extend(env, {'GIT_PAGER': 'cat', 'PAGER': 'cat'}, 'keep')
+      if terminal_mode ==# 'interactive'
+        let base = s:Resolve(tempname())
+        let editor = 'sh ' . s:TempScript(
+              \ '[ -f "$FUGITIVE.exit" ] && cat "$FUGITIVE.exit" >&2 && exit 1',
+              \ 'echo "$1" > "$FUGITIVE.edit"',
+              \ '"$FUGITIVE_NVIM" --headless --server "${NVIM:-$NVIM_LISTEN_ADDRESS}" --remote-expr "fugitive#TerminalEditRequest(''$FUGITIVE'')" >/dev/null 2>&1',
+              \ 'while [ -f "$FUGITIVE.edit" -a ! -f "$FUGITIVE.exit" ]; do sleep 0.05 2>/dev/null || sleep 1; done',
+              \ 'exit 0')
+        call extend(env, {
+              \ 'FUGITIVE': base,
+              \ 'FUGITIVE_NVIM': v:progpath,
+              \ 'GIT_EDITOR': editor,
+              \ 'GIT_SEQUENCE_EDITOR': editor}, 'keep')
+      endif
+      let setup = {'env': env, 'git_dir': options.git_dir, 'cwd': s:UserCommandCwd(dir)}
+      return mods . (curwin ? 'enew' : 'new') . '|call fugitive#OpenTerminal(' . string(argv) . ', ' . string(setup) . ')' . after
+    elseif has('nvim')
       call fugitive#Autowrite()
       return mods . (curwin ? 'enew' : 'new') . '|call termopen(' . string(argv) . ', ' . string(term_opts) . ')' . assign . '|startinsert' . after
     elseif exists('*term_start')

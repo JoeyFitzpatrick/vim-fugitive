@@ -34,6 +34,28 @@ that are part of Git repositories).
                         resume running the command.  A few Git subcommands
                         have different behavior; these are documented below.
 
+                                                *g:fugitive_terminal_commands*
+                        In Neovim, selected subcommands run in an interactive
+                        |terminal| buffer instead so that ANSI color output
+                        (for example from `commit` pre-commit hooks or from
+                        `status`) is preserved and the result can be navigated
+                        with the usual fugitive maps.  Any editor such a command
+                        spawns (for example a commit message) is still opened in
+                        the current session.  By default this applies to: >
+
+                        let g:fugitive_terminal_commands = {
+                              \ 'commit': 'interactive',
+                              \ 'status': 'read'}
+<
+                        The value chooses the behavior: 'interactive' keeps the
+                        process interactive (and routes its editor back into
+                        the session), 'read' always uses a terminal, and
+                        'read-only' uses a terminal only for "read" variants of
+                        the command (as opposed to variants that modify the
+                        repository).  Extend the dictionary to add more
+                        subcommands, or set a value to '' to disable one.
+                        Passing --no-pager (-P) always bypasses the terminal.
+
                                                 *:Git!*
 :Git! {args}            Run an arbitrary git command in the background and
                         stream the output to the preview window.  Requires a
