@@ -3571,9 +3571,7 @@ function! s:RunClose(state, tmp, job, ...) abort
     endif
     call setbufvar(a:state.capture_bufnr, '&modified', 0)
     call setbufvar(a:state.capture_bufnr, '&buflisted', 0)
-    if a:state.filetype !=# getbufvar(a:state.capture_bufnr, '&filetype', '')
-      call setbufvar(a:state.capture_bufnr, '&filetype', a:state.filetype)
-    endif
+    call setbufvar(a:state.capture_bufnr, '&filetype', a:state.filetype)
   endif
   if !has_key(a:state, 'exit_status')
     return
