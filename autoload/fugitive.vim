@@ -5865,6 +5865,50 @@ function! s:DifftoolSubcommand(line1, line2, range, bang, mods, options) abort
   return s:ToolStream(a:line1, a:line2, a:range, a:bang, a:mods, a:options, argv, state)
 endfunction
 
+" Section: :GDifftool
+
+" Fired on BufWinEnter. Guarded so it only runs inside a tab opened by
+" :GDifftool (t:fugitive_difftool) and never re-enters while it is itself
+" opening the diff split.
+function! s:DifftoolAutodiff() abort
+  if !exists('t:fugitive_difftool') || exists('s:difftool_diffing')
+    return
+  endif
+  " Only diff normal file buffers; skip the quickfix window, unnamed buffers
+  " and fugitive's own object buffers (the other side of a diff).
+  if &buftype !=# '' || empty(@%) || bufname('%') =~# '^fugitive:'
+    return
+  endif
+  let s:difftool_diffing = 1
+  try
+    only
+    " t:fugitive_difftool holds the revision to diff against (empty for the
+    " default of the working tree vs the index).
+    exe 'Gvdiffsplit' t:fugitive_difftool
+  catch
+  finally
+    unlet! s:difftool_diffing
+  endtry
+endfunction
+
+augroup fugitive_difftool
+  autocmd!
+  " 'nested' lets Gvdiffsplit's own autocmds fire so the fugitive object buffer
+  " actually loads its content and buffer-local mappings (e.g. q).
+  autocmd BufWinEnter * nested call s:DifftoolAutodiff()
+augroup END
+
+function! fugitive#DifftoolCommand(line1, count, range, bang, mods, arg) abort
+  let dir = s:Dir()
+  exe s:DirCheck(dir)
+  let mods = substitute(a:mods, '\<tab\>', '', 'g')
+  tabedit
+  " Diff each opened file against the revision the difftool ran against (the
+  " first non-flag argument), defaulting to the index.
+  let t:fugitive_difftool = matchstr(a:arg, '\%(^\|\s\)\zs[^-]\S*')
+  return fugitive#Command(a:line1, a:count, a:range, a:bang, mods, 'difftool ' . a:arg, dir)
+endfunction
+
 " Section: :Ggrep, :Glog
 
 if !exists('g:fugitive_summary_format')
