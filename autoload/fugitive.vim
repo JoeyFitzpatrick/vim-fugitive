@@ -8114,6 +8114,7 @@ function! s:MapGitOps(is_ftplugin) abort
   exe s:Map('n', 'cA', ':<C-U>echoerr "Use cn"<CR>', '<silent><unique>', ft)
   exe s:Map('n', 'c?', ':<C-U>help fugitive_c<CR>', '<silent>', ft)
 
+  exe s:Map('n', 'cR', ':<C-U>Git reset --mixed HEAD^<CR>', '<silent>', ft)
   exe s:Map('n', 'cr<Space>', ':Git revert<Space>', '', ft)
   exe s:Map('n', 'cr<CR>', ':Git revert<CR>', '', ft)
   exe s:Map('n', 'crc', ':<C-U>Git revert <C-R>=<SID>SquashArgument()<CR><CR>', '<silent>', ft)
@@ -8266,6 +8267,7 @@ function! s:MapHelpSections() abort
         \ ['cs', 'commit --squash=[commit under cursor]'],
         \ ['cn', 'commit --edit --squash=[commit under cursor]'],
         \ ['c<Space>', 'populate command line with :Git commit'],
+        \ ['cR', 'undo last commit, keep changes (reset --mixed HEAD^)'],
         \ ]])
   call add(sections, ['Checkout / Branch', [
         \ ['coo', 'checkout commit / file under cursor'],
