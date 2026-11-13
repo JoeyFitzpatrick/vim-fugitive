@@ -593,6 +593,8 @@ exe 'command! -bar -bang -nargs=* -complete=customlist,fugitive#EditComplete Gvd
 
 exe 'command! -bang -nargs=* -range=-1 -complete=customlist,fugitive#Complete GDifftool exe fugitive#DifftoolCommand(<line1>, <count>, +"<range>", <bang>0, "<mods>", <q-args>)'
 
+exe 'command! -nargs=+ -complete=customlist,fugitive#Complete GDelta exe fugitive#DeltaCommand(<q-args>)'
+
 exe 'command! -bar -bang -nargs=* -complete=customlist,fugitive#EditComplete Gw     exe fugitive#WriteCommand(<line1>, <count>, +"<range>", <bang>0, "<mods>", <q-args>)'
 exe 'command! -bar -bang -nargs=* -complete=customlist,fugitive#EditComplete Gwrite exe fugitive#WriteCommand(<line1>, <count>, +"<range>", <bang>0, "<mods>", <q-args>)'
 exe 'command! -bar -bang -nargs=* -complete=customlist,fugitive#EditComplete Gwq    exe fugitive#WqCommand(   <line1>, <count>, +"<range>", <bang>0, "<mods>", <q-args>)'

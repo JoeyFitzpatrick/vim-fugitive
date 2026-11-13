@@ -5909,6 +5909,28 @@ function! fugitive#DifftoolCommand(line1, count, range, bang, mods, arg) abort
   return fugitive#Command(a:line1, a:count, a:range, a:bang, mods, 'difftool ' . a:arg, dir)
 endfunction
 
+" Section: :GDelta
+
+function! fugitive#DeltaCommand(arg) abort
+  let dir = s:Dir()
+  exe s:DirCheck(dir)
+  if !has('nvim-0.11')
+    return 'echoerr "fugitive: :GDelta requires Neovim 0.11 or newer"'
+  endif
+  if !executable('delta')
+    return 'echoerr "fugitive: :GDelta requires delta on your PATH"'
+  endif
+  let cmd = FugitiveShellCommand(dir) . ' -c color.ui=always ' . a:arg . ' | delta --paging=never'
+  tabnew
+  let job = jobstart(cmd, {'term': v:true})
+  if job <= 0
+    bwipeout!
+    return 'echoerr ' . string('fugitive: :GDelta could not start: ' . cmd)
+  endif
+  nnoremap <buffer> <silent> q <Cmd>bwipeout!<CR>
+  return ''
+endfunction
+
 " Section: :Ggrep, :Glog
 
 if !exists('g:fugitive_summary_format')
